@@ -1,6 +1,9 @@
 import os
 import dj_database_url
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv() 
 
 
 # -----------------------------
@@ -11,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # -----------------------------
 # SECURITY
 # -----------------------------
-SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
+SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = ["*"]
 
@@ -74,15 +77,12 @@ ASGI_APPLICATION = 'Moonit_backend.asgi.application'
 # -----------------------------
 # Config par défaut pour dev local
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR}/db.sqlite3",
+    'default': dj_database_url.config(
+        default=os.getenv("DATABASE_URL"),
         conn_max_age=600,
+        ssl_require=True  # Supabase nécessite SSL
     )
 }
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL:
-    DATABASES["default"] = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
-
 # -----------------------------
 # PASSWORD VALIDATION
 # -----------------------------
