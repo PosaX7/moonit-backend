@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'transactions',
     'corsheaders',
     'channels',
+    'users',
 ]
 
 # -----------------------------

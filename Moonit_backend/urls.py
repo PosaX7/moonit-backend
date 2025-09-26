@@ -4,6 +4,7 @@ from django.http import HttpResponse
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", lambda request: HttpResponse("Bienvenue sur l'API Moonit!")),
+    path("", lambda request: HttpResponse("Bienvenue sur l'API NoTiMo")),
+    path("api/auth/", include("users.urls")),
     path("api/", include("transactions.urls")),
 ]
