@@ -12,6 +12,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             'libelle',
             'categorie',
             'type',
+            'module',
             'date',
             'montant',
             'montant_formate',
@@ -19,6 +20,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         ]
 
     def get_montant_formate(self, obj):
+        # Formatage avec séparation des milliers
         return f"{int(obj.montant):,}".replace(",", " ")
 
     def get_date_formatee(self, obj):
