@@ -2,22 +2,25 @@ from rest_framework import serializers
 from .models import Transaction
 
 class TransactionSerializer(serializers.ModelSerializer):
+    # Champs calculés
     montant_formate = serializers.SerializerMethodField(read_only=True)
     date_formatee = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Transaction
         fields = [
-            'id',
-            'libelle',
-            'categorie',
-            'type',
-            'module',
-            'date',
-            'montant',
-            'montant_formate',
-            'date_formatee',
+            "id",
+            "local_id",       # ID propre à l'utilisateur
+            "libelle",
+            "categorie",
+            "type",
+            "module",
+            "date",
+            "montant",
+            "montant_formate",
+            "date_formatee",
         ]
+        read_only_fields = ["local_id", "date", "montant_formate", "date_formatee"]
 
     def get_montant_formate(self, obj):
         # Formatage avec séparation des milliers

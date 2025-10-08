@@ -5,42 +5,31 @@ from django.db.models import Sum
 from .models import Transaction
 from .serializers import TransactionSerializer
 
-# ---------------------------
-# TransactionViewSet
-# ---------------------------
+
 class TransactionViewSet(viewsets.ModelViewSet):
     """
-    Gère la création, la lecture, la mise à jour et la suppression
-    des transactions de l'utilisateur connecté uniquement.
-    Permet de distinguer les modules : 'suivi' ou 'budget'.
+    Gestion des transactions de l'utilisateur connecté.
+    Inclut la création, lecture, mise à jour et suppression.
+    Filtrage par module : 'suivi' ou 'budget'.
     """
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Retourne uniquement les transactions de l'utilisateur connecté,
-        triées par date décroissante, et filtrées par module si précisé.
-        """
         user = self.request.user
         module = self.request.query_params.get("module")  # 'suivi' ou 'budget'
         qs = Transaction.objects.filter(user=user)
         if module in ["suivi", "budget"]:
             qs = qs.filter(module=module)
-        return qs.order_by("-date")
+        # Trier par local_id pour que chaque utilisateur voie ses transactions dans l'ordre
+        return qs.order_by("local_id")
 
     def perform_create(self, serializer):
-        """
-        Crée une transaction et l'associe automatiquement à l'utilisateur connecté.
-        Le module par défaut est 'suivi', mais peut être passé dans la requête.
-        """
         module = self.request.data.get("module", "suivi")
+        # local_id sera géré automatiquement par le modèle
         serializer.save(user=self.request.user, module=module)
 
 
-# ---------------------------
-# Solde API
-# ---------------------------
 @api_view(["GET"])
 def solde(request):
     """
@@ -49,11 +38,11 @@ def solde(request):
     """
     user = request.user
     module = request.query_params.get("module")
-    
+
     transactions = Transaction.objects.filter(user=user)
     if module in ["suivi", "budget"]:
         transactions = transactions.filter(module=module)
-    
+
     revenus = transactions.filter(type="revenu").aggregate(total=Sum("montant"))["total"] or 0
     depenses = transactions.filter(type="depense").aggregate(total=Sum("montant"))["total"] or 0
 
