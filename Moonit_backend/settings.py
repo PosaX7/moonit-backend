@@ -112,17 +112,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # -----------------------------
 # CORS
 # -----------------------------
-CORS_ALLOW_ALL_ORIGINS = False
-
-CORS_ALLOWED_ORIGINS = [
-    "https://notimo.netlify.app",
-]
-
-CORS_ALLOW_CREDENTIALS = True
-
-CSFR_TRUSTED_ORIGINS = [
-    "https://notimo.netlify.app",
-]
+CORS_ALLOW_ALL_ORIGINS = True
 # -----------------------------
 # CHANNELS
 # -----------------------------
