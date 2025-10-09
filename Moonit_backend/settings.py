@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'channels',
     'users',
     'django_extensions',
+    'django_filters',
 ]
 
 # -----------------------------
@@ -113,6 +114,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # CORS
 # -----------------------------
 CORS_ALLOW_ALL_ORIGINS = True
+
 # -----------------------------
 # CHANNELS
 # -----------------------------

@@ -11,22 +11,44 @@ class TransactionViewSet(viewsets.ModelViewSet):
     Gestion des transactions de l'utilisateur connecté.
     Inclut la création, lecture, mise à jour et suppression.
     Filtrage par module : 'suivi' ou 'budget'.
+    + Filtres avancés : description, type, date, mois.
     """
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        module = self.request.query_params.get("module")  # 'suivi' ou 'budget'
         qs = Transaction.objects.filter(user=user)
+
+        # --- Filtrage par module (déjà présent) ---
+        module = self.request.query_params.get("module")
         if module in ["suivi", "budget"]:
             qs = qs.filter(module=module)
-        # Trier par local_id pour que chaque utilisateur voie ses transactions dans l'ordre
+
+        # --- 🔍 Nouveaux filtres personnalisés ---
+        description = self.request.query_params.get("description")  # libellé
+        type_ = self.request.query_params.get("type")               # revenu / depense
+        date = self.request.query_params.get("date")                # format YYYY-MM-DD
+        month = self.request.query_params.get("month")              # format YYYY-MM
+
+        if description:
+            qs = qs.filter(description__icontains=description)
+        if type_:
+            qs = qs.filter(type__iexact=type_)
+        if date:
+            qs = qs.filter(date__date=date)
+        if month:
+            try:
+                year, month_num = month.split("-")
+                qs = qs.filter(date__year=year, date__month=month_num)
+            except ValueError:
+                pass  # Ignore si mauvais format
+
+        # Trier par local_id pour garder l’ordre d’insertion
         return qs.order_by("local_id")
 
     def perform_create(self, serializer):
         module = self.request.data.get("module", "suivi")
-        # local_id sera géré automatiquement par le modèle
         serializer.save(user=self.request.user, module=module)
 
 
