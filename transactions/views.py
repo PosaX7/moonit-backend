@@ -32,7 +32,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         month = self.request.query_params.get("month")              # format YYYY-MM
 
         if description:
-            qs = qs.filter(description__icontains=description)
+            qs = qs.filter(libelle__icontains=description)
         if type_:
             qs = qs.filter(type__iexact=type_)
         if date:
