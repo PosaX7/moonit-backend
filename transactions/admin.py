@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Categorie, Transaction
+from .models import Categorie, Transaction, Libelle, Photo
 
 
 @admin.register(Categorie)
@@ -59,47 +59,67 @@ class CategorieAdmin(admin.ModelAdmin):
     desactiver_categories.short_description = "Désactiver les catégories sélectionnées"
 
 
+class LibelleInline(admin.TabularInline):
+    """Inline pour afficher les libellés dans la transaction"""
+    model = Libelle
+    extra = 1
+    fields = ['nom', 'date', 'montant', 'commentaire']
+
+
+class PhotoInline(admin.TabularInline):
+    """Inline pour afficher les photos dans la transaction"""
+    model = Photo
+    extra = 0
+    fields = ['image', 'legende', 'image_preview']
+    readonly_fields = ['image_preview']
+    
+    def image_preview(self, obj):
+        """Prévisualisation de l'image"""
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-width:100px;max-height:100px;border-radius:4px;" />',
+                obj.image.url
+            )
+        return "—"
+    image_preview.short_description = 'Aperçu'
+
+
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = [
-        'libelle',
-        'montant_display',
+        'categorie_display',
+        'montant_total_display',
+        'nb_libelles_display',
         'position',
         'volet',
-        'categorie_display',
         'user',
-        'date',
-        'statut',
-        'photo_preview'
+        'created_at',
+        'statut'
     ]
     list_filter = [
         'volet',
         'position',
         'statut',
         'categorie',
-        'date',
+        'created_at',
         'user'
     ]
-    search_fields = ['libelle', 'commentaire', 'id']
-    readonly_fields = ['id', 'created_at', 'updated_at', 'photo_preview_large']
-    date_hierarchy = 'date'
-    ordering = ['-date']
+    search_fields = ['id', 'categorie__nom', 'libelles__nom']
+    readonly_fields = ['id', 'created_at', 'updated_at', 'montant_total']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    inlines = [LibelleInline, PhotoInline]
     
     fieldsets = (
         ('Type de transaction', {
             'fields': ('volet', 'position', 'categorie')
         }),
-        ('Détails', {
-            'fields': ('libelle', 'commentaire')
-        }),
-        ('Montant', {
-            'fields': ('montant', 'devise')
-        }),
-        ('Justificatif', {
-            'fields': ('photo', 'photo_preview_large')
-        }),
         ('Propriétaire', {
-            'fields': ('user', 'statut', 'date')
+            'fields': ('user', 'statut', 'devise')
+        }),
+        ('Résumé', {
+            'fields': ('montant_total',),
+            'description': 'Le montant total est calculé automatiquement à partir des libellés'
         }),
         ('Métadonnées', {
             'fields': ('id', 'created_at', 'updated_at'),
@@ -107,24 +127,34 @@ class TransactionAdmin(admin.ModelAdmin):
         }),
     )
     
-    def montant_display(self, obj):
-        """Affiche le montant avec couleur selon le type"""
+    def montant_total_display(self, obj):
+        """Affiche le montant total avec couleur"""
+        montant = obj.montant_total
         if obj.position == 'revenu':
-            color = '#10B981'  # vert
+            color = '#10B981'
             symbole = '+'
         else:
-            color = '#EF4444'  # rouge
+            color = '#EF4444'
             symbole = '-'
         
         return format_html(
             '<span style="color:{};font-weight:bold;">{}{} {}</span>',
             color,
             symbole,
-            obj.montant,
+            montant,
             obj.devise
         )
-    montant_display.short_description = 'Montant'
-    montant_display.admin_order_field = 'montant'
+    montant_total_display.short_description = 'Montant Total'
+    
+    def nb_libelles_display(self, obj):
+        """Affiche le nombre de libellés"""
+        count = obj.libelles.count()
+        return format_html(
+            '<span style="background:#e2e8f0;padding:4px 8px;border-radius:4px;font-weight:600;">{} libellé{}</span>',
+            count,
+            's' if count > 1 else ''
+        )
+    nb_libelles_display.short_description = 'Libellés'
     
     def categorie_display(self, obj):
         """Affiche la catégorie avec sa couleur"""
@@ -134,26 +164,6 @@ class TransactionAdmin(admin.ModelAdmin):
             obj.categorie.nom
         )
     categorie_display.short_description = 'Catégorie'
-    
-    def photo_preview(self, obj):
-        """Petite prévisualisation de la photo dans la liste"""
-        if obj.photo:
-            return format_html(
-                '<img src="{}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" />',
-                obj.photo.url
-            )
-        return "—"
-    photo_preview.short_description = 'Photo'
-    
-    def photo_preview_large(self, obj):
-        """Grande prévisualisation de la photo dans le détail"""
-        if obj.photo:
-            return format_html(
-                '<img src="{}" style="max-width:400px;max-height:400px;border-radius:8px;" />',
-                obj.photo.url
-            )
-        return "Aucune photo"
-    photo_preview_large.short_description = 'Aperçu de la photo'
     
     actions = ['valider_transactions', 'annuler_transactions']
     
@@ -166,3 +176,84 @@ class TransactionAdmin(admin.ModelAdmin):
         updated = queryset.update(statut='annulee')
         self.message_user(request, f"{updated} transaction(s) annulée(s).")
     annuler_transactions.short_description = "Annuler les transactions sélectionnées"
+
+
+@admin.register(Libelle)
+class LibelleAdmin(admin.ModelAdmin):
+    list_display = ['nom', 'transaction_info', 'montant', 'date', 'created_at']
+    list_filter = ['date', 'transaction__position', 'transaction__categorie']
+    search_fields = ['nom', 'commentaire', 'transaction__id']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    date_hierarchy = 'date'
+    
+    fieldsets = (
+        ('Transaction', {
+            'fields': ('transaction',)
+        }),
+        ('Détails', {
+            'fields': ('nom', 'date', 'montant', 'commentaire')
+        }),
+        ('Métadonnées', {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def transaction_info(self, obj):
+        """Affiche des infos sur la transaction parente"""
+        return format_html(
+            '<span style="color:{};">{}</span>',
+            obj.transaction.categorie.couleur,
+            obj.transaction.categorie.nom
+        )
+    transaction_info.short_description = 'Transaction'
+
+
+@admin.register(Photo)
+class PhotoAdmin(admin.ModelAdmin):
+    list_display = ['image_preview', 'transaction_info', 'legende', 'created_at']
+    list_filter = ['created_at', 'transaction__position']
+    search_fields = ['legende', 'transaction__id']
+    readonly_fields = ['id', 'created_at', 'image_preview_large']
+    
+    fieldsets = (
+        ('Transaction', {
+            'fields': ('transaction',)
+        }),
+        ('Photo', {
+            'fields': ('image', 'image_preview_large', 'legende')
+        }),
+        ('Métadonnées', {
+            'fields': ('id', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def image_preview(self, obj):
+        """Petite prévisualisation"""
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;" />',
+                obj.image.url
+            )
+        return "—"
+    image_preview.short_description = 'Aperçu'
+    
+    def image_preview_large(self, obj):
+        """Grande prévisualisation"""
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-width:400px;max-height:400px;border-radius:8px;" />',
+                obj.image.url
+            )
+        return "Aucune image"
+    image_preview_large.short_description = 'Image'
+    
+    def transaction_info(self, obj):
+        """Affiche des infos sur la transaction parente"""
+        return format_html(
+            '<span style="color:{};">{}</span>',
+            obj.transaction.categorie.couleur,
+            obj.transaction.categorie.nom
+        )
+    transaction_info.short_description = 'Transaction'

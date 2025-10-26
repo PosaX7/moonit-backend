@@ -123,50 +123,19 @@ class Transaction(models.Model):
         verbose_name="Catégorie"
     )
     
-    # Informations de la transaction
-    libelle = models.CharField(
-        max_length=200,
-        verbose_name="Libellé",
-        help_text="Description courte de la transaction"
-    )
-    commentaire = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name="Commentaire",
-        help_text="Notes ou détails supplémentaires"
-    )
-    
-    # Montant
-    montant = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-        verbose_name="Montant"
-    )
-    devise = models.CharField(
-        max_length=3,
-        default='XAF',
-        verbose_name="Devise"
-    )
-    
-    # Photo/Reçu
-    photo = models.ImageField(
-        upload_to='transactions/%Y/%m/',
-        blank=True,
-        null=True,
-        verbose_name="Photo/Reçu",
-        help_text="Photo de la transaction ou du reçu"
-    )
-    
-    # Statut et dates
+    # Statut
     statut = models.CharField(
         max_length=20,
         choices=STATUT_CHOICES,
         default='validee',
         verbose_name="Statut"
     )
-    date = models.DateTimeField(
-        verbose_name="Date de la transaction"
+    
+    # Devise par défaut
+    devise = models.CharField(
+        max_length=3,
+        default='XAF',
+        verbose_name="Devise"
     )
     
     # Métadonnées
@@ -175,18 +144,24 @@ class Transaction(models.Model):
     
     class Meta:
         db_table = 'transactions_transaction'
-        ordering = ['-date']
+        ordering = ['-created_at']
         verbose_name = "Transaction"
         verbose_name_plural = "Transactions"
         indexes = [
-            models.Index(fields=['user', 'date']),
+            models.Index(fields=['user', 'created_at']),
             models.Index(fields=['user', 'volet', 'position']),
-            models.Index(fields=['categorie', 'date']),
+            models.Index(fields=['categorie', 'created_at']),
         ]
     
     def __str__(self):
         symbole = "💰" if self.position == 'revenu' else "💸"
-        return f"{symbole} {self.libelle} - {self.montant} {self.devise}"
+        nb_libelles = self.libelles.count()
+        return f"{symbole} {self.categorie.nom} ({nb_libelles} libellé{'s' if nb_libelles > 1 else ''})"
+    
+    @property
+    def montant_total(self):
+        """Calcule le montant total de tous les libellés"""
+        return sum(libelle.montant for libelle in self.libelles.all())
     
     @property
     def est_budget(self):
@@ -197,3 +172,99 @@ class Transaction(models.Model):
     def est_suivi(self):
         """Vérifie si c'est une entrée de suivi réel"""
         return self.volet == 'suivi'
+
+
+class Libelle(models.Model):
+    """Libellés détaillés d'une transaction (une transaction peut avoir plusieurs libellés)"""
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name="ID unique"
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name='libelles',
+        verbose_name="Transaction"
+    )
+    
+    # Informations du libellé
+    nom = models.CharField(
+        max_length=200,
+        verbose_name="Nom du libellé",
+        help_text="Ex: Consultation médecin, Médicaments, etc."
+    )
+    date = models.DateTimeField(
+        verbose_name="Date du libellé"
+    )
+    montant = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        verbose_name="Montant"
+    )
+    commentaire = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Commentaire",
+        help_text="Notes ou détails supplémentaires pour ce libellé"
+    )
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
+    
+    class Meta:
+        db_table = 'transactions_libelle'
+        ordering = ['date', 'created_at']
+        verbose_name = "Libellé"
+        verbose_name_plural = "Libellés"
+        indexes = [
+            models.Index(fields=['transaction', 'date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.nom} - {self.montant} {self.transaction.devise}"
+
+
+class Photo(models.Model):
+    """Photos/Reçus associés à une transaction (une transaction peut avoir plusieurs photos)"""
+    
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name="ID unique"
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name='photos',
+        verbose_name="Transaction"
+    )
+    
+    image = models.ImageField(
+        upload_to='transactions/%Y/%m/',
+        verbose_name="Photo/Reçu"
+    )
+    legende = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name="Légende",
+        help_text="Description de la photo"
+    )
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Ajoutée le")
+    
+    class Meta:
+        db_table = 'transactions_photo'
+        ordering = ['created_at']
+        verbose_name = "Photo"
+        verbose_name_plural = "Photos"
+    
+    def __str__(self):
+        return f"Photo - {self.transaction}"

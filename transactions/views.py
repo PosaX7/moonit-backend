@@ -4,13 +4,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
-from datetime import datetime, timedelta
-from .models import Categorie, Transaction
+from .models import Categorie, Transaction, Libelle, Photo
 from .serializers import (
     CategorieSerializer,
     TransactionSerializer,
     TransactionListSerializer,
-    StatistiquesSerializer
+    TransactionCreateSerializer,
+    StatistiquesSerializer,
+    PhotoSerializer
 )
 
 
@@ -82,10 +83,10 @@ class CategorieViewSet(viewsets.ModelViewSet):
 
 class TransactionViewSet(viewsets.ModelViewSet):
     """
-    ViewSet pour gérer les transactions
+    ViewSet pour gérer les transactions avec libellés multiples
     
     list: Liste toutes les transactions de l'utilisateur
-    create: Créer une transaction
+    create: Créer une transaction avec ses libellés
     retrieve: Détails d'une transaction
     update/partial_update: Modifier une transaction
     destroy: Supprimer une transaction
@@ -100,18 +101,20 @@ class TransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['volet', 'position', 'statut', 'categorie']
-    search_fields = ['libelle', 'commentaire']
-    ordering_fields = ['date', 'montant', 'created_at']
-    ordering = ['-date']
+    search_fields = ['categorie__nom', 'libelles__nom']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
     
     def get_queryset(self):
         """Retourne uniquement les transactions de l'utilisateur connecté"""
-        return Transaction.objects.filter(user=self.request.user).select_related('categorie')
+        return Transaction.objects.filter(user=self.request.user).select_related('categorie').prefetch_related('libelles', 'photos')
     
     def get_serializer_class(self):
-        """Utilise un serializer simplifié pour les listes"""
+        """Utilise un serializer adapté selon l'action"""
         if self.action == 'list':
             return TransactionListSerializer
+        elif self.action == 'create':
+            return TransactionCreateSerializer
         return TransactionSerializer
     
     @action(detail=False, methods=['get'])
@@ -133,23 +136,23 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if volet:
             queryset = queryset.filter(volet=volet)
         if date_debut:
-            queryset = queryset.filter(date__gte=date_debut)
+            queryset = queryset.filter(libelles__date__gte=date_debut)
         if date_fin:
-            queryset = queryset.filter(date__lte=date_fin)
+            queryset = queryset.filter(libelles__date__lte=date_fin)
         
-        # Calculs
-        revenus = queryset.filter(position='revenu', statut='validee').aggregate(
-            total=Sum('montant')
-        )['total'] or 0
+        # Calculs basés sur les libellés
+        revenus_libelles = Libelle.objects.filter(
+            transaction__in=queryset.filter(position='revenu', statut='validee')
+        ).aggregate(total=Sum('montant'))['total'] or 0
         
-        depenses = queryset.filter(position='depense', statut='validee').aggregate(
-            total=Sum('montant')
-        )['total'] or 0
+        depenses_libelles = Libelle.objects.filter(
+            transaction__in=queryset.filter(position='depense', statut='validee')
+        ).aggregate(total=Sum('montant'))['total'] or 0
         
-        solde = revenus - depenses
+        solde = revenus_libelles - depenses_libelles
         nb_transactions = queryset.count()
         
-        # Dépenses par catégorie
+        # Dépenses par catégorie (somme des libellés)
         depenses_cat = queryset.filter(
             position='depense',
             statut='validee'
@@ -158,11 +161,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
             'categorie__couleur',
             'categorie__icone'
         ).annotate(
-            total=Sum('montant'),
-            nombre=Count('id')
+            total=Sum('libelles__montant'),
+            nombre=Count('id', distinct=True)
         ).order_by('-total')
         
-        # Revenus par catégorie
+        # Revenus par catégorie (somme des libellés)
         revenus_cat = queryset.filter(
             position='revenu',
             statut='validee'
@@ -171,13 +174,13 @@ class TransactionViewSet(viewsets.ModelViewSet):
             'categorie__couleur',
             'categorie__icone'
         ).annotate(
-            total=Sum('montant'),
-            nombre=Count('id')
+            total=Sum('libelles__montant'),
+            nombre=Count('id', distinct=True)
         ).order_by('-total')
         
         data = {
-            'total_revenus': revenus,
-            'total_depenses': depenses,
+            'total_revenus': revenus_libelles,
+            'total_depenses': depenses_libelles,
             'solde': solde,
             'nb_transactions': nb_transactions,
             'depenses_par_categorie': list(depenses_cat),
@@ -207,9 +210,9 @@ class TransactionViewSet(viewsets.ModelViewSet):
         
         try:
             queryset = self.get_queryset().filter(
-                date__year=int(annee),
-                date__month=int(mois)
-            )
+                libelles__date__year=int(annee),
+                libelles__date__month=int(mois)
+            ).distinct()
             
             volet = request.query_params.get('volet')
             if volet:
@@ -244,3 +247,15 @@ class TransactionViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()[:10]
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def ajouter_photo(self, request, pk=None):
+        """Ajouter une photo à une transaction"""
+        transaction = self.get_object()
+        serializer = PhotoSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save(transaction=transaction)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
