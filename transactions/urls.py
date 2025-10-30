@@ -1,11 +1,8 @@
-from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CategorieViewSet, TransactionViewSet
+from .views import TransactionViewSet, CategorieViewSet
 
 router = DefaultRouter()
-router.register(r'categories', CategorieViewSet, basename='categorie')
-router.register(r'transactions', TransactionViewSet, basename='transaction')
+router.register('categories', CategorieViewSet, basename='categories')
+router.register('', TransactionViewSet, basename='transactions')  # ✅ route vide
 
-urlpatterns = [
-    path('', include(router.urls)),
-]
+urlpatterns = router.urls
