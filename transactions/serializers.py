@@ -78,14 +78,18 @@ class TransactionCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         try:
             # Catégorie prédéfinie OU créée par l'utilisateur
-            Categorie.objects.get(
+            categorie = Categorie.objects.filter(
                 id=value,
                 est_active=True
             ).filter(
                 Q(est_predefinite=True) | Q(creee_par=user)
-            )
+            ).first()
+            
+            if not categorie:
+                raise serializers.ValidationError("Catégorie invalide ou inaccessible")
+            
             return value
-        except Categorie.DoesNotExist:
+        except Exception as e:
             raise serializers.ValidationError("Catégorie invalide ou inaccessible")
     
     def create(self, validated_data):
