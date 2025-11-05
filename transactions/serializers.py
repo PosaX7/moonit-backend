@@ -82,7 +82,7 @@ class TransactionCreateSerializer(serializers.ModelSerializer):
                 id=value,
                 est_active=True
             ).filter(
-                Q(est_predefinie=True) | Q(creee_par=user)
+                Q(est_predefinite=True) | Q(creee_par=user)
             ).first()
             
             if not categorie:
@@ -129,7 +129,7 @@ class TransactionCreateSerializer(serializers.ModelSerializer):
 class TransactionListSerializer(serializers.ModelSerializer):
     """Serializer pour LISTER les transactions (vue simplifiée)"""
     
-    categorie_detail = CategorieDetailSerializer(source='categorie', read_only=True)
+    categorie = CategorieDetailSerializer(read_only=True)
     montant_total = serializers.SerializerMethodField()
     nb_libelles = serializers.SerializerMethodField()
     premier_libelle = serializers.SerializerMethodField()
@@ -137,7 +137,7 @@ class TransactionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = [
-            'id', 'volet', 'position', 'categorie_detail', 'statut',
+            'id', 'volet', 'position', 'categorie', 'statut',
             'devise', 'montant_total', 'nb_libelles', 'premier_libelle',
             'created_at', 'updated_at'
         ]
@@ -158,7 +158,7 @@ class TransactionListSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     """Serializer complet pour AFFICHER/MODIFIER une transaction"""
     
-    categorie_detail = CategorieDetailSerializer(source='categorie', read_only=True)
+    categorie = CategorieDetailSerializer(read_only=True)
     categorie_id = serializers.UUIDField(write_only=True, required=False)
     
     # ✅ Utiliser source='libelles' et many=True pour lire correctement
@@ -172,7 +172,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         model = Transaction
         fields = [
             'id', 'user', 'volet', 'position',
-            'categorie_id', 'categorie_detail',
+            'categorie_id', 'categorie',
             'statut', 'devise',
             'libelles', 'photos',
             'montant_total', 'nb_libelles',
